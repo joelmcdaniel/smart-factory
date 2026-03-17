@@ -1,0 +1,86 @@
+mqtt:
+  # MQTT Broker connection URL
+  # Default: tcp://localhost:1883
+  # Override with: MQTT_BROKER environment variable
+  broker: tcp://localhost:1883
+
+  # Unique client identifier for this subscriber
+  # Default: go-factory-listener
+  # Override with: MQTT_CLIENT_ID environment variable
+  clientId: go-factory-listener
+
+  # Topics to subscribe to (supports MQTT wildcards)
+  # # = subscribe to all subtopics
+  # + = subscribe to single topic level
+  # Default: ["factory/#"]
+  # Override with: MQTT_TOPICS environment variable (comma-separated)
+  topics:
+    - factory/#
+
+  # Keep-alive interval (in seconds) for broker heartbeat
+  # Default: 60
+  # Override with: MQTT_KEEP_ALIVE environment variable
+  keepAlive: 60s
+
+  # Number of reconnection attempts with exponential backoff
+  # Default: 5
+  # Override with: MQTT_RECONNECT_ATTEMPTS environment variable
+  reconnectAttempts: 5
+
+  # Initial backoff duration (in seconds) for first reconnection attempt
+  # Doubles with each attempt until reaching reconnectBackoffMax
+  # Default: 1
+  # Override with: MQTT_RECONNECT_BACKOFF environment variable
+  reconnectBackoff: 1s
+
+  # Maximum backoff duration (in seconds) between reconnection attempts
+  # Default: 30
+  # Override with: MQTT_RECONNECT_BACKOFF_MAX environment variable
+  reconnectBackoffMax: 30s
+
+  # Default message payload format
+  # Options: "auto" (auto-detect), "json", "csv", "raw"
+  # Default: auto
+  # Override with: MQTT_DEFAULT_PAYLOAD_FORMAT environment variable
+  #
+  # Format examples:
+  # JSON: {"id":"sensor-01","temperature":23.5,"timestamp":1710585600}
+  # CSV:  sensor-01,23.5,1710585600
+  # Raw:  sensor-01 (temperature defaults to 0)
+  defaultPayloadFormat: auto
+
+  # Timeout (in milliseconds) for graceful MQTT disconnect
+  # Default: 250
+  # Override with: MQTT_DISCONNECT_TIMEOUT environment variable
+  disconnectTimeout: 250ms
+
+# Example configurations for different scenarios:
+
+# ---
+# Local Development (localhost MQTT)
+# mqtt:
+#   broker: tcp://localhost:1883
+#   clientId: go-factory-listener-dev
+#   topics: ["factory/#"]
+#   keepAlive: 60s
+#   reconnectAttempts: 3
+#   reconnectBackoff: 1s
+
+# ---
+# Production (Docker broker)
+# mqtt:
+#   broker: tcp://mqtt-broker:1883
+#   clientId: go-factory-listener-prod
+#   topics: ["factory/sensors/#", "factory/alerts/#"]
+#   keepAlive: 60s
+#   reconnectAttempts: 5
+#   reconnectBackoff: 2s
+#   reconnectBackoffMax: 60s
+
+# ---
+# Multiple Topics
+# mqtt:
+#   topics:
+#     - factory/sensors/temperature/#
+#     - factory/sensors/humidity/#
+#     - factory/pumps/#

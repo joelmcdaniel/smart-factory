@@ -17,3 +17,9 @@ type SensorRepository interface {
 type AlertService interface {
 	NotifyTeam(ctx context.Context, message string) error
 }
+
+// IngestionService defines the interface for processing sensor readings.
+// External adapters (MQTT, HTTP, etc.) depend on this interface, not the concrete implementation.
+type IngestionService interface {
+	ProcessReading(ctx context.Context, data domain.SensorData) error
+}
