@@ -44,8 +44,8 @@ type SubscriberMetricsSnapshot struct {
 
 // MessageToProcess represents a message queued for processing
 type MessageToProcess struct {
-	Topic   string
-	Payload []byte
+	Topic    string
+	Payload  []byte
 	Received time.Time
 }
 
