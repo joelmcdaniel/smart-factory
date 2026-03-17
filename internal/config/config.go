@@ -18,39 +18,65 @@ var (
 
 // Config is the root configuration struct
 type Config struct {
-	MQTT *MQTTConfig `yaml:"mqtt"`
+	MQTT    *MQTTConfig `yaml:"mqtt"`
+	Logging *LogConfig  `yaml:"logging"`
 }
 
-// LoadConfig loads configuration from a YAML file with environment variable overrides
-// If the config file doesn't exist, returns defaults with environment overrides
-func LoadConfig(filePath string) (*Config, error) {
+// LoadConfig loads configuration from YAML files with environment variable overrides
+// Loads both mqtt.yaml and logging.yaml if they exist
+func LoadConfig(mqttFilePath, loggingFilePath string) (*Config, error) {
 	config := &Config{
-		MQTT: DefaultMQTTConfig(),
+		MQTT:    DefaultMQTTConfig(),
+		Logging: DefaultLogConfig(),
 	}
 
-	// Try to load from file if it exists
-	if _, err := os.Stat(filePath); err == nil {
-		data, err := os.ReadFile(filePath)
+	// Load MQTT configuration
+	if _, err := os.Stat(mqttFilePath); err == nil {
+		data, err := os.ReadFile(mqttFilePath)
 		if err != nil {
-			return nil, fmt.Errorf("failed to read config file %s: %w", filePath, err)
+			return nil, fmt.Errorf("failed to read MQTT config file %s: %w", mqttFilePath, err)
 		}
 
-		if err := yaml.Unmarshal(data, config); err != nil {
-			return nil, fmt.Errorf("failed to parse YAML config: %w", err)
+		mqttCfg := &struct {
+			MQTT *MQTTConfig `yaml:"mqtt"`
+		}{}
+
+		if err := yaml.Unmarshal(data, mqttCfg); err != nil {
+			return nil, fmt.Errorf("failed to parse MQTT YAML config: %w", err)
 		}
 
-		// Ensure MQTT config is not nil
-		if config.MQTT == nil {
-			config.MQTT = DefaultMQTTConfig()
+		if mqttCfg.MQTT != nil {
+			config.MQTT = mqttCfg.MQTT
 		}
 	} else if !os.IsNotExist(err) {
-		// Return error if stat failed for other reasons (permissions, etc)
-		return nil, fmt.Errorf("failed to stat config file: %w", err)
+		return nil, fmt.Errorf("failed to stat MQTT config file: %w", err)
 	}
-	// If file doesn't exist, continue with defaults (no error)
+
+	// Load Logging configuration
+	if _, err := os.Stat(loggingFilePath); err == nil {
+		data, err := os.ReadFile(loggingFilePath)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read logging config file %s: %w", loggingFilePath, err)
+		}
+
+		logCfg := &struct {
+			Logging *LogConfig `yaml:"logging"`
+		}{}
+
+		if err := yaml.Unmarshal(data, logCfg); err != nil {
+			return nil, fmt.Errorf("failed to parse logging YAML config: %w", err)
+		}
+
+		if logCfg.Logging != nil {
+			config.Logging = logCfg.Logging
+		}
+	} else if !os.IsNotExist(err) {
+		return nil, fmt.Errorf("failed to stat logging config file: %w", err)
+	}
 
 	// Apply environment variable overrides
 	config.MQTT.ApplyEnvOverrides()
+	config.Logging.ApplyEnvOverrides()
 
 	// Validate configuration
 	if err := config.MQTT.Validate(); err != nil {
@@ -60,17 +86,19 @@ func LoadConfig(filePath string) (*Config, error) {
 	return config, nil
 }
 
-// LoadConfigOrDefault loads config from file or returns defaults with env overrides
-// This is more lenient than LoadConfig - it won't fail if the file is missing
-func LoadConfigOrDefault(filePath string) *Config {
-	config, err := LoadConfig(filePath)
+// LoadConfigOrDefault loads config from files or returns defaults with env overrides
+// This is more lenient than LoadConfig - it won't fail if the files are missing
+func LoadConfigOrDefault(mqttFilePath, loggingFilePath string) *Config {
+	config, err := LoadConfig(mqttFilePath, loggingFilePath)
 	if err != nil {
 		// Log warning but don't fail startup
-		fmt.Fprintf(os.Stderr, "Warning: could not load config from %s: %v, using defaults\n", filePath, err)
+		fmt.Fprintf(os.Stderr, "Warning: could not load config from %s or %s: %v, using defaults\n", mqttFilePath, loggingFilePath, err)
 		config = &Config{
-			MQTT: DefaultMQTTConfig(),
+			MQTT:    DefaultMQTTConfig(),
+			Logging: DefaultLogConfig(),
 		}
 		config.MQTT.ApplyEnvOverrides()
+		config.Logging.ApplyEnvOverrides()
 	}
 	return config
 }

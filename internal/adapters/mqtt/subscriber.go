@@ -3,7 +3,7 @@ package mqtt
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"sync"
 	"time"
 
@@ -11,6 +11,7 @@ import (
 
 	"github.com/joelmcdaniel/go-microservices-and-iot-ingest/smart-factory/internal/config"
 	"github.com/joelmcdaniel/go-microservices-and-iot-ingest/smart-factory/internal/core/ports"
+	"github.com/joelmcdaniel/go-microservices-and-iot-ingest/smart-factory/internal/pkg/logger"
 )
 
 // Subscriber manages MQTT client connection and message handling
@@ -89,7 +90,9 @@ func (s *Subscriber) Connect(ctx context.Context) error {
 	s.connected = true
 	s.mu.Unlock()
 
-	log.Printf("[MQTT] Connected to broker: %s", s.config.Broker)
+	slog.Info("Connected to MQTT broker",
+		slog.String("broker", s.config.Broker),
+	)
 
 	// Start message processor goroutine
 	s.processingWg.Add(1)
@@ -112,7 +115,9 @@ func (s *Subscriber) Subscribe() error {
 		if token.Error() != nil {
 			return fmt.Errorf("failed to subscribe to topic %s: %w", topic, token.Error())
 		}
-		log.Printf("[MQTT] Subscribed to topic: %s", topic)
+		slog.Debug("Subscribed to MQTT topic",
+			slog.String("topic", topic),
+		)
 	}
 
 	return nil
@@ -120,7 +125,7 @@ func (s *Subscriber) Subscribe() error {
 
 // Disconnect gracefully closes the MQTT connection and stops processing
 func (s *Subscriber) Disconnect() {
-	log.Println("[MQTT] Disconnecting from broker...")
+	slog.Info("Disconnecting from MQTT broker")
 
 	// Stop reconnection attempts
 	close(s.stopReconnect)
@@ -138,7 +143,7 @@ func (s *Subscriber) Disconnect() {
 	s.connected = false
 	s.mu.Unlock()
 
-	log.Println("[MQTT] Disconnected from broker")
+	slog.Info("Disconnected from MQTT broker")
 }
 
 // isConnected checks if the client is connected
@@ -171,7 +176,7 @@ func (s *Subscriber) onConnect(client mqtt.Client) {
 	s.mu.Lock()
 	s.connected = true
 	s.mu.Unlock()
-	log.Println("[MQTT] Connected to broker")
+	slog.Info("MQTT client connected to broker")
 }
 
 // onConnectionLost is called when the connection is lost
@@ -179,7 +184,9 @@ func (s *Subscriber) onConnectionLost(client mqtt.Client, err error) {
 	s.mu.Lock()
 	s.connected = false
 	s.mu.Unlock()
-	log.Printf("[MQTT] Connection lost: %v. Starting reconnection attempts...", err)
+	slog.Warn("MQTT connection lost, starting reconnection attempts",
+		slog.String("error", err.Error()),
+	)
 
 	// Start reconnection loop
 	go s.reconnectLoop()
@@ -193,20 +200,31 @@ func (s *Subscriber) reconnectLoop() {
 	for attempt := 0; attempt < s.config.ReconnectAttempts; attempt++ {
 		select {
 		case <-s.stopReconnect:
-			log.Println("[MQTT] Reconnection loop stopped")
+			slog.Info("Reconnection loop stopped")
 			return
 		case <-time.After(backoff):
-			log.Printf("[MQTT] Reconnection attempt %d/%d after %v", attempt+1, s.config.ReconnectAttempts, backoff)
+			slog.Debug("MQTT reconnection attempt",
+				slog.Int("attempt", attempt+1),
+				slog.Int("max_attempts", s.config.ReconnectAttempts),
+				slog.Duration("backoff", backoff),
+			)
 
-			if err := s.reconnect(); err == nil {
-				// Successful reconnection
+			if err := s.reconnect(); err != nil {
+				slog.Debug("Reconnection failed", slog.String("error", err.Error()))
+			} else {
+				// Reconnection succeeded, try to resubscribe
 				if err := s.Subscribe(); err != nil {
-					log.Printf("[MQTT] Failed to resubscribe after reconnection: %v", err)
+					slog.Error("Failed to resubscribe after reconnection",
+						slog.String("error", err.Error()),
+					)
+				} else {
+					// Successfully reconnected and resubscribed
+					slog.Info("Successfully reconnected to MQTT broker")
+					return
 				}
-				return
 			}
 
-			// Exponential backoff: backoff = min(backoff * 2, maxBackoff)
+			// Increase backoff for next attempt
 			backoff = time.Duration(float64(backoff) * 1.5)
 			if backoff > maxBackoff {
 				backoff = maxBackoff
@@ -214,7 +232,9 @@ func (s *Subscriber) reconnectLoop() {
 		}
 	}
 
-	log.Printf("[MQTT] Failed to reconnect after %d attempts", s.config.ReconnectAttempts)
+	slog.Error("Failed to reconnect to MQTT broker",
+		slog.Int("attempts", s.config.ReconnectAttempts),
+	)
 }
 
 // reconnect attempts to reconnect to the broker
@@ -243,7 +263,9 @@ func (s *Subscriber) messageHandler(client mqtt.Client, msg mqtt.Message) {
 		Received: time.Now(),
 	}:
 	case <-s.stopProcessing:
-		log.Println("[MQTT] Message processor stopped, discarding message")
+		slog.Debug("Message processor stopped, discarding message",
+			slog.String("topic", msg.Topic()),
+		)
 	}
 }
 
@@ -254,7 +276,7 @@ func (s *Subscriber) messageProcessor() {
 	for {
 		select {
 		case <-s.stopProcessing:
-			log.Println("[MQTT] Message processor shutting down")
+			slog.Info("Message processor shutting down")
 			return
 		case msg := <-s.messageProcessorCh:
 			s.processMessage(msg)
@@ -267,10 +289,17 @@ func (s *Subscriber) processMessage(msg MessageToProcess) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
+	// Create a trace ID based on message topic and timestamp
+	traceID := fmt.Sprintf("%s-%d", msg.Topic, msg.Received.UnixNano())
+	ctx = logger.WithTraceID(ctx, traceID)
+
 	// Parse payload and invoke service
 	sensorData, err := ParsePayload(msg.Payload, s.config.DefaultPayloadFormat)
 	if err != nil {
-		log.Printf("[MQTT] Error parsing payload from topic %s: %v", msg.Topic, err)
+		slog.ErrorContext(ctx, "Failed to parse MQTT payload",
+			slog.String("topic", msg.Topic),
+			slog.String("error", err.Error()),
+		)
 		s.metrics.mu.Lock()
 		s.metrics.ProcessErrors++
 		s.metrics.mu.Unlock()
@@ -279,7 +308,10 @@ func (s *Subscriber) processMessage(msg MessageToProcess) {
 
 	// Process the reading through the service
 	if err := s.service.ProcessReading(ctx, sensorData); err != nil {
-		log.Printf("[MQTT] Error processing reading: %v", err)
+		slog.ErrorContext(ctx, "Failed to process sensor reading",
+			slog.String("sensor_id", sensorData.ID),
+			slog.String("error", err.Error()),
+		)
 		s.metrics.mu.Lock()
 		s.metrics.ProcessErrors++
 		s.metrics.mu.Unlock()
@@ -290,5 +322,8 @@ func (s *Subscriber) processMessage(msg MessageToProcess) {
 	s.metrics.MessagesProcessed++
 	s.metrics.mu.Unlock()
 
-	log.Printf("[MQTT] Processed reading from %s: %.2f°C", sensorData.ID, sensorData.Temperature)
+	slog.InfoContext(ctx, "Successfully processed sensor reading",
+		slog.String("sensor_id", sensorData.ID),
+		slog.Float64("temperature", sensorData.Temperature),
+	)
 }
