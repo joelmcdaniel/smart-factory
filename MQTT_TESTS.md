@@ -172,54 +172,134 @@ func TestParsePayloadJSON(t *testing.T) {
 
 ### Coverage Analysis
 
-#### Covered (`payload.go`):
+#### Covered by Current Tests (`payload.go`):
 
-✅ `ParsePayload()` - Main entry point  
-✅ `parseJSON()` - JSON format handler  
-✅ `parseCSV()` - CSV format handler  
-✅ `parseRaw()` - Raw format handler  
-✅ `detectFormat()` - Format auto-detection  
-✅ Error paths and validation  
-✅ Timestamp handling (defaults and explicit)
+✅ `ParsePayload()` - Main entry point with all format options  
+✅ `parseJSON()` - JSON format handler with all scenarios  
+✅ `parseCSV()` - CSV format handler with field validation  
+✅ `parseRaw()` - Raw format handler with trimming  
+✅ `detectFormat()` - Format auto-detection logic  
+✅ Error paths - Invalid inputs, parsing errors, validation failures  
+✅ Timestamp handling - Default current time and explicit values
 
-#### Not Covered (`subscriber.go`):
+#### Not Covered (Requires Integration Tests):
 
-⚠️ MQTT client connection/disconnection (requires mock MQTT broker)  
-⚠️ Message threading and goroutines (requires integration test setup)  
-⚠️ Exponential backoff reconnection logic (requires timing simulation)
+⚠️ `Subscriber.Connect()` - MQTT broker connection requires live/mock broker  
+⚠️ `Subscriber.Subscribe()` - Topic subscription and callback handling  
+⚠️ Message processing goroutines - Async message handling and threading  
+⚠️ Graceful shutdown - Signal handling and cleanup  
+⚠️ End-to-end flow - MQTT message → parsing → service processing
 
-_Note: Connection logic is better tested via integration tests with a real/mocked MQTT broker._
+_Note: Integration testing is better done with a containerized MQTT broker (Mosquitto in Docker)._
 
 ---
 
 ### Future Test Enhancements
 
-#### Integration Tests (Requires Mosquitto):
+#### Integration Tests with Mosquitto:
 
 ```bash
-# Future: docker-compose up mosquitto for integration tests
-go test -tags integration ./internal/adapters/mqtt
+# Start Mosquitto in Docker for integration tests
+docker run -d -p 1883:1883 eclipse-mosquitto
+
+# Run integration tests (requires build tag)
+go test -tags integration ./internal/adapters/mqtt -v
+```
+
+Example integration test structure:
+
+```go
+// +build integration
+
+func TestSubscriberEndToEnd(t *testing.T) {
+    // Requires running MQTT broker on localhost:1883
+    cfg := &config.MQTTConfig{
+        Broker:   "tcp://localhost:1883",
+        Topics:   []string{"test/sensors/#"},
+        ClientID: "test-subscriber",
+    }
+
+    subscriber := mqtt.NewSubscriber(cfg, mockService)
+    defer subscriber.Disconnect()
+
+    // Connect and verify message flow
+    if err := subscriber.Connect(context.Background()); err != nil {
+        t.Fatalf("Connect failed: %v", err)
+    }
+    // ... publish messages and verify processing
+}
 ```
 
 #### Benchmark Tests:
 
 ```go
 func BenchmarkParsePayloadJSON(b *testing.B) {
-    payload := []byte(`{"id":"sensor-01","temperature":23.5,"timestamp":1710585600}`)
+    payload := []byte(`{"id":"sensor-01","temperature":23.5}`)
+    b.ResetTimer()
     for i := 0; i < b.N; i++ {
         ParsePayload(payload, string(FormatJSON))
     }
 }
+
+func BenchmarkParsePayloadCSV(b *testing.B) {
+    payload := []byte(`sensor-01,23.5`)
+    b.ResetTimer()
+    for i := 0; i < b.N; i++ {
+        ParsePayload(payload, string(FormatCSV))
+    }
+}
+```
+
+Run benchmarks:
+
+```bash
+go test ./internal/adapters/mqtt -bench=. -benchmem
 ```
 
 #### Fuzz Testing (Go 1.18+):
 
 ```go
 func FuzzParsePayload(f *testing.F) {
+    // Seed with known good examples
     f.Add([]byte(`{"id":"s1","temperature":23.5}`), "auto")
+    f.Add([]byte(`sensor-01,23.5`), "auto")
+    f.Add([]byte(`sensor-01`), "auto")
+
     f.Fuzz(func(t *testing.T, payload []byte, format string) {
+        // Should not panic on any input
         _, _ = ParsePayload(payload, format)
     })
+}
+```
+
+Run fuzz tests:
+
+```bash
+go test ./internal/adapters/mqtt -fuzz=FuzzParsePayload -fuzztime=30s
+```
+
+#### Subscriber Connection Tests:
+
+```go
+func TestSubscriberConnect(t *testing.T) {
+    // Requires mock or real MQTT broker
+    cfg := &config.MQTTConfig{
+        Broker:   "tcp://localhost:1883",
+        ClientID: "test-client",
+    }
+
+    sub := mqtt.NewSubscriber(cfg, mockService)
+    ctx := context.Background()
+
+    if err := sub.Connect(ctx); err != nil {
+        t.Fatalf("Connect failed: %v", err)
+    }
+    defer sub.Disconnect()
+
+    // Verify connected state
+    if !sub.IsConnected() {
+        t.Error("Expected subscriber to be connected")
+    }
 }
 ```
 
@@ -238,16 +318,32 @@ func FuzzParsePayload(f *testing.F) {
 === RUN   TestParsePayloadJSON/invalid_JSON_syntax
 --- PASS: TestParsePayloadJSON/invalid_JSON_syntax (0.00s)
 --- PASS: TestParsePayloadJSON (0.00s)
-...
+
+=== RUN   TestParsePayloadCSV
+=== RUN   TestParsePayloadCSV/valid_CSV_with_all_fields
+--- PASS: TestParsePayloadCSV/valid_CSV_with_all_fields (0.00s)
+--- PASS: TestParsePayloadCSV (0.00s)
+
+=== RUN   TestParsePayloadRaw
+--- PASS: TestParsePayloadRaw (0.00s)
+
+=== RUN   TestDetectFormat
+--- PASS: TestDetectFormat (0.00s)
+
+=== RUN   TestLargeTemperatureValues
 === RUN   TestLargeTemperatureValues/very_high_temperature_(critical_alert_trigger)
 --- PASS: TestLargeTemperatureValues/very_high_temperature_(critical_alert_trigger) (0.00s)
+--- PASS: TestLargeTemperatureValues (0.00s)
+
 PASS
-ok      github.com/joelmcdaniel/go-microservices-and-iot-injest/smart-factory/internal/adapters/mqtt    0.006s
+ok    github.com/joelmcdaniel/go-microservices-and-iot-ingest/smart-factory/internal/adapters/mqtt    0.006s
 ```
 
 ---
 
 ### CI/CD Integration Example
+
+If you have a GitHub Actions workflow for testing, add MQTT tests:
 
 ```yaml
 # .github/workflows/test.yml
@@ -260,9 +356,11 @@ jobs:
       - uses: actions/checkout@v3
       - uses: actions/setup-go@v4
         with:
-          go-version: 1.26
-      - run: go test ./... -v -coverprofile=coverage.out
-      - run: go tool cover -func=coverage.out
+          go-version: "1.21"
+      - name: Run tests
+        run: go test ./... -v -coverprofile=coverage.out
+      - name: Upload coverage
+        run: go tool cover -func=coverage.out
 ```
 
 ---
@@ -288,17 +386,25 @@ jobs:
 },
 ```
 
----
-
 ## Summary
 
-The test suite comprehensively validates payload parsing for all supported formats:
+The current test suite comprehensively validates payload parsing for all supported formats:
 
-✅ **Complete format coverage** — JSON, CSV, raw bytes, auto-detect  
+✅ **Complete format coverage** — JSON, CSV, raw bytes, auto-detection  
 ✅ **Error handling** — Invalid inputs properly rejected  
 ✅ **Edge cases** — Empty payloads, extreme values, whitespace, scientific notation  
 ✅ **Domain validation** — Required fields enforced  
 ✅ **Timestamp handling** — Defaults and explicit values  
-✅ **Fast execution** — All 43 tests complete in 0.006 seconds
+✅ **Fast execution** — All 43 tests complete in ~0.006 seconds
 
-**To add more tests**, follow the table-driven test pattern and add entries to the relevant test function's `tests` slice.
+### Current Test Scope
+
+**What's tested:** Payload parsing logic (`payload.go`)  
+**What requires separate testing:** MQTT subscriber connection and message processing (`subscriber.go`)
+
+To add more tests:
+
+1. **Unit tests** - Follow the table-driven test pattern in the current test file
+2. **Integration tests** - Use Docker + Mosquitto for end-to-end testing
+3. **Benchmarks** - Measure parsing performance under load
+4. **Fuzz tests** - Exercise parser robustness with random inputs
