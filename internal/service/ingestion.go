@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/joelmcdaniel/go-microservices-and-iot-injest/smart-factory/internal/core/domain"
-	"github.com/joelmcdaniel/go-microservices-and-iot-injest/smart-factory/internal/core/ports"
+	"github.com/joelmcdaniel/go-microservices-and-iot-ingest/smart-factory/internal/core/domain"
+	"github.com/joelmcdaniel/go-microservices-and-iot-ingest/smart-factory/internal/core/ports"
 )
 
 // IngestionService implements the logic for processing data.
