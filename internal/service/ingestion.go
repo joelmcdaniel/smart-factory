@@ -8,22 +8,22 @@ import (
 	"github.com/joelmcdaniel/go-microservices-and-iot-injest/smart-factory/internal/core/ports"
 )
 
-// Injestion service implements the logic for processing data.
-type InjestionService struct {
+// IngestionService implements the logic for processing data.
+type IngestionService struct {
 	repo    ports.SensorRepository
 	alerter ports.AlertService
 }
 
 // NewIngestionService is the constructor.
 // Dependency Injection happens here!
-func NewIngestionService(r ports.SensorRepository, a ports.AlertService) *InjestionService {
-	return &InjestionService{
+func NewIngestionService(r ports.SensorRepository, a ports.AlertService) *IngestionService {
+	return &IngestionService{
 		repo:    r,
 		alerter: a,
 	}
 }
 
-func (s *InjestionService) ProcessReading(ctx context.Context, data domain.SensorData) error {
+func (s *IngestionService) ProcessReading(ctx context.Context, data domain.SensorData) error {
 	// 1. Validate(Pure Domain Logic)
 	if err := data.Validate(); err != nil {
 		return err
