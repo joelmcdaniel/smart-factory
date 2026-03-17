@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/joelmcdaniel/go-microservices-and-iot-injest/smart-factory/internal/core/domain"
+	"github.com/joelmcdaniel/go-microservices-and-iot-ingest/smart-factory/internal/core/domain"
 )
 
 // PayloadFormat represents the format of an MQTT message payload

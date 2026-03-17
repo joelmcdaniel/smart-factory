@@ -7,11 +7,11 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/joelmcdaniel/go-microservices-and-iot-injest/smart-factory/internal/adapters/mqtt"
-	"github.com/joelmcdaniel/go-microservices-and-iot-injest/smart-factory/internal/adapters/repo"
-	"github.com/joelmcdaniel/go-microservices-and-iot-injest/smart-factory/internal/config"
-	"github.com/joelmcdaniel/go-microservices-and-iot-injest/smart-factory/internal/core/domain"
-	"github.com/joelmcdaniel/go-microservices-and-iot-injest/smart-factory/internal/service"
+	"github.com/joelmcdaniel/go-microservices-and-iot-ingest/smart-factory/internal/adapters/mqtt"
+	"github.com/joelmcdaniel/go-microservices-and-iot-ingest/smart-factory/internal/adapters/repo"
+	"github.com/joelmcdaniel/go-microservices-and-iot-ingest/smart-factory/internal/config"
+	"github.com/joelmcdaniel/go-microservices-and-iot-ingest/smart-factory/internal/core/domain"
+	"github.com/joelmcdaniel/go-microservices-and-iot-ingest/smart-factory/internal/service"
 )
 
 // MockAlert is a simple adapter for the AlertService port

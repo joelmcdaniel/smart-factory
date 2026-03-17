@@ -9,8 +9,8 @@ import (
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 
-	"github.com/joelmcdaniel/go-microservices-and-iot-injest/smart-factory/internal/config"
-	"github.com/joelmcdaniel/go-microservices-and-iot-injest/smart-factory/internal/core/ports"
+	"github.com/joelmcdaniel/go-microservices-and-iot-ingest/smart-factory/internal/config"
+	"github.com/joelmcdaniel/go-microservices-and-iot-ingest/smart-factory/internal/core/ports"
 )
 
 // Subscriber manages MQTT client connection and message handling
@@ -44,8 +44,8 @@ type SubscriberMetricsSnapshot struct {
 
 // MessageToProcess represents a message queued for processing
 type MessageToProcess struct {
-	Topic   string
-	Payload []byte
+	Topic    string
+	Payload  []byte
 	Received time.Time
 }
 
