@@ -1,0 +1,30 @@
+# Logging configuration for Smart Factory
+# This file configures structured logging with JSON output and distributed tracing
+#
+# Environment variable overrides:
+# - LOG_LEVEL: debug, info, warn, error
+# - SERVICE_NAME: service identifier for log correlation
+# - LOG_FORMAT: json or text
+
+logging:
+  # Log level: debug, info, warn, error
+  # Default: info
+  # Override with: LOG_LEVEL environment variable
+  level: info
+
+  # Service name for log correlation across distributed services
+  # Used in trace_id correlation and identifying logs from this service
+  # Default: smart-factory
+  # Override with: SERVICE_NAME environment variable
+  serviceName: smart-factory
+
+  # Log output format: json or text
+  # json: structured logs for log aggregation systems (ElasticSearch, Splunk, etc)
+  # text: human-readable logs for local development
+  # Default: json (recommended for production)
+  # Override with: LOG_FORMAT environment variable
+  format: json
+
+# Example log output (JSON format):
+# {"time":"2026-03-16T10:30:45.123Z","level":"INFO","msg":"Connected to MQTT broker","service":"smart-factory","trace_id":"factory/sensors-1710585045123456789","broker":"tcp://localhost:1883"}
+# {"time":"2026-03-16T10:30:45.234Z","level":"INFO","msg":"Successfully processed sensor reading","service":"smart-factory","trace_id":"factory/sensors-1710585045234567890","sensor_id":"sensor-01","temperature":23.5}

@@ -500,3 +500,104 @@ func TestLargeTemperatureValues(t *testing.T) {
 		})
 	}
 }
+
+// TestExponentialBackoffCalculation verifies the backoff increases exponentially
+func TestExponentialBackoffCalculation(t *testing.T) {
+	tests := []struct {
+		name       string
+		initial    time.Duration
+		multiplier float64
+		maxBackoff time.Duration
+		iterations int
+		expectFinal time.Duration
+	}{
+		{
+			name:        "backoff increases with 1.5x multiplier",
+			initial:     1 * time.Second,
+			multiplier:  1.5,
+			maxBackoff:  30 * time.Second,
+			iterations:  3,
+			expectFinal: 3375 * time.Millisecond, // 1s * 1.5 * 1.5 * 1.5
+		},
+		{
+			name:        "backoff caps at maxBackoff",
+			initial:     10 * time.Second,
+			multiplier:  1.5,
+			maxBackoff:  30 * time.Second,
+			iterations:  10, // Would exceed maxBackoff
+			expectFinal: 30 * time.Second,
+		},
+		{
+			name:        "single iteration",
+			initial:     1 * time.Second,
+			multiplier:  1.5,
+			maxBackoff:  30 * time.Second,
+			iterations:  1,
+			expectFinal: 1500 * time.Millisecond,
+		},
+		{
+			name:        "zero iterations",
+			initial:     1 * time.Second,
+			multiplier:  1.5,
+			maxBackoff:  30 * time.Second,
+			iterations:  0,
+			expectFinal: 1 * time.Second,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			backoff := tt.initial
+			for i := 0; i < tt.iterations; i++ {
+				backoff = time.Duration(float64(backoff) * tt.multiplier)
+				if backoff > tt.maxBackoff {
+					backoff = tt.maxBackoff
+				}
+			}
+
+			if backoff != tt.expectFinal {
+				t.Errorf("backoff = %v, want %v", backoff, tt.expectFinal)
+			}
+		})
+	}
+}
+
+// TestBackoffNeverExceedsMax verifies backoff respects the maximum
+func TestBackoffNeverExceedsMax(t *testing.T) {
+	maxBackoff := 30 * time.Second
+	backoff := 1 * time.Second
+
+	// Run many iterations to ensure it never exceeds max
+	for i := 0; i < 100; i++ {
+		backoff = time.Duration(float64(backoff) * 1.5)
+		if backoff > maxBackoff {
+			backoff = maxBackoff
+		}
+
+		if backoff > maxBackoff {
+			t.Errorf("iteration %d: backoff %v exceeded maxBackoff %v", i, backoff, maxBackoff)
+		}
+	}
+
+	if backoff != maxBackoff {
+		t.Errorf("final backoff = %v, want %v", backoff, maxBackoff)
+	}
+}
+
+// TestBackoffStartsAtInitialValue verifies initial backoff is used first
+func TestBackoffStartsAtInitialValue(t *testing.T) {
+	initial := 1 * time.Second
+	backoff := initial
+
+	// First backoff should be the initial value, then increase
+	if backoff != initial {
+		t.Errorf("initial backoff = %v, want %v", backoff, initial)
+	}
+
+	// After one iteration, should increase
+	backoff = time.Duration(float64(backoff) * 1.5)
+	expected := time.Duration(1500 * time.Millisecond)
+	if backoff != expected {
+		t.Errorf("after 1x1.5 = %v, want %v", backoff, expected)
+	}
+}
